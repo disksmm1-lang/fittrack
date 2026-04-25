@@ -30,7 +30,7 @@ export default async function WorkoutDetailPage({ params }: { params: Promise<{ 
     ? await supabase.from('workout_sets').select('*').in('workout_exercise_id', exerciseIds).order('set_number')
     : { data: [] }
 
-  const setsByExercise: Record<string, typeof allSets> = {}
+  const setsByExercise: Record<string, { id: string; workout_exercise_id: string; set_number: number; weight_kg: number | null; reps: number | null }[]> = {}
   for (const s of allSets ?? []) {
     if (!setsByExercise[s.workout_exercise_id]) setsByExercise[s.workout_exercise_id] = []
     setsByExercise[s.workout_exercise_id]!.push(s)
