@@ -5,7 +5,7 @@ export interface Message {
   content: string | { type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }[]
 }
 
-export async function chatWithAI(messages: Message[], model = 'deepseek/deepseek-v4-pro') {
+export async function chatWithAI(messages: Message[], model = 'mistralai/mistral-small-3.2-24b-instruct') {
   const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
     headers: {
@@ -27,13 +27,8 @@ export async function chatWithAI(messages: Message[], model = 'deepseek/deepseek
   }
 
   const data = await response.json()
-  console.log('OpenRouter response:', JSON.stringify(data).slice(0, 500))
   const content = data.choices?.[0]?.message?.content
   if (!content) throw new Error(`No content in response: ${JSON.stringify(data).slice(0, 200)}`)
-  if (Array.isArray(content)) {
-    const textBlock = content.find((b: { type: string; text?: string }) => b.type === 'text')
-    return (textBlock?.text ?? '') as string
-  }
   return content as string
 }
 
