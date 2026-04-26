@@ -27,7 +27,12 @@ export async function chatWithAI(messages: Message[], model = 'deepseek/deepseek
   }
 
   const data = await response.json()
-  return data.choices[0].message.content as string
+  const content = data.choices[0].message.content
+  if (Array.isArray(content)) {
+    const textBlock = content.find((b: { type: string; text?: string }) => b.type === 'text')
+    return (textBlock?.text ?? '') as string
+  }
+  return content as string
 }
 
 export async function analyzeNutritionPhoto(base64Image: string) {
