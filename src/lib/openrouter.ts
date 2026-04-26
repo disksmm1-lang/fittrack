@@ -5,7 +5,7 @@ export interface Message {
   content: string | { type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }[]
 }
 
-export async function chatWithAI(messages: Message[], model = 'google/gemini-flash-1.5') {
+export async function chatWithAI(messages: Message[], model = 'deepseek/deepseek-v4-pro') {
   const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
     headers: {
