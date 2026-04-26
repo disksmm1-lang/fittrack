@@ -12,6 +12,13 @@ const MEAL_LABELS: Record<string, string> = {
   snack: 'Перекус',
 }
 
+const MEAL_COLORS: Record<string, string> = {
+  breakfast: 'text-orange-400 bg-orange-500/15',
+  lunch: 'text-green-400 bg-green-500/15',
+  dinner: 'text-blue-400 bg-blue-500/15',
+  snack: 'text-purple-400 bg-purple-500/15',
+}
+
 export default async function NutritionPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -34,7 +41,6 @@ export default async function NutritionPage() {
     { calories: 0, protein_g: 0, fat_g: 0, carbs_g: 0 }
   )
 
-  // Calculate TDEE if profile complete
   let calorieGoal = 2000
   if (profile?.weight && profile?.height && profile?.age && profile?.gender) {
     const bmr = profile.gender === 'male'
@@ -49,6 +55,7 @@ export default async function NutritionPage() {
   }
 
   const progress = Math.min((totals.calories / calorieGoal) * 100, 100)
+  const remaining = Math.max(0, calorieGoal - totals.calories)
 
   const byMeal: Record<string, typeof entries> = {}
   for (const e of entries ?? []) {
@@ -57,41 +64,51 @@ export default async function NutritionPage() {
   }
 
   return (
-    <div className="px-4 py-6 max-w-lg mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white">Питание</h1>
+    <div className="px-4 pt-8 pb-6 max-w-lg mx-auto">
+      <div className="flex items-center justify-between mb-7">
+        <h1 className="text-[28px] font-bold text-white">Питание</h1>
         <div className="flex gap-2">
-          <Link href="/nutrition/photo" className="w-10 h-10 bg-zinc-800 rounded-xl flex items-center justify-center">
-            <Camera className="w-5 h-5 text-zinc-300" />
+          <Link href="/nutrition/photo" className="w-10 h-10 bg-[#111] border border-white/[0.07] rounded-xl flex items-center justify-center">
+            <Camera className="w-5 h-5 text-zinc-400" />
           </Link>
-          <Link href="/nutrition/add" className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-medium text-sm">
+          <Link href="/nutrition/add" className="flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl font-semibold text-sm">
             <Plus className="w-4 h-4" />
             Добавить
           </Link>
         </div>
       </div>
 
-      {/* Calories progress */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-white font-semibold">Калории</span>
-          <span className="text-zinc-400 text-sm">{Math.round(totals.calories)} / {Math.round(calorieGoal)} ккал</span>
+      {/* Calories card */}
+      <div className="bg-[#111] border border-white/[0.07] rounded-2xl p-5 mb-4">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <p className="text-zinc-500 text-xs font-semibold uppercase tracking-wider mb-1">Сегодня</p>
+            <p className="text-4xl font-bold text-white leading-none">{Math.round(totals.calories)}</p>
+            <p className="text-zinc-600 text-sm mt-1">из {Math.round(calorieGoal)} ккал</p>
+          </div>
+          <div className="text-right">
+            <p className="text-zinc-500 text-xs font-medium">Осталось</p>
+            <p className="text-2xl font-bold text-green-400 leading-none mt-1">{Math.round(remaining)}</p>
+            <p className="text-zinc-600 text-xs mt-1">ккал</p>
+          </div>
         </div>
-        <div className="w-full h-3 bg-zinc-800 rounded-full overflow-hidden">
+
+        <div className="h-2 bg-zinc-800 rounded-full overflow-hidden mb-5">
           <div
             className="h-full bg-green-500 rounded-full transition-all"
             style={{ width: `${progress}%` }}
           />
         </div>
-        <div className="flex justify-between mt-3">
+
+        <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Белки', value: totals.protein_g, color: 'text-blue-400' },
-            { label: 'Жиры', value: totals.fat_g, color: 'text-yellow-400' },
-            { label: 'Углеводы', value: totals.carbs_g, color: 'text-orange-400' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="text-center">
-              <p className={`font-semibold ${color}`}>{Math.round(value)}г</p>
-              <p className="text-zinc-500 text-xs">{label}</p>
+            { label: 'Белки', value: totals.protein_g, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+            { label: 'Жиры', value: totals.fat_g, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+            { label: 'Углеводы', value: totals.carbs_g, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+          ].map(({ label, value, color, bg }) => (
+            <div key={label} className={`${bg} rounded-xl px-3 py-2.5 text-center`}>
+              <p className={`text-lg font-bold ${color} leading-none`}>{Math.round(value)}</p>
+              <p className="text-zinc-600 text-xs mt-1">{label}, г</p>
             </div>
           ))}
         </div>
@@ -101,29 +118,43 @@ export default async function NutritionPage() {
       {['breakfast', 'lunch', 'dinner', 'snack'].map(meal => {
         const mealEntries = byMeal[meal] ?? []
         const mealCals = mealEntries.reduce((s, e) => s + e.calories, 0)
+        const colorClass = MEAL_COLORS[meal] ?? 'text-zinc-400 bg-zinc-800'
         return (
-          <div key={meal} className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-zinc-400 text-sm font-medium">{MEAL_LABELS[meal]}</span>
-              {mealCals > 0 && <span className="text-zinc-500 text-xs">{Math.round(mealCals)} ккал</span>}
-            </div>
-            <div className="flex flex-col gap-2">
-              {mealEntries.map(e => (
-                <div key={e.id} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 flex justify-between items-center">
-                  <div>
-                    <p className="text-white text-sm font-medium">{e.food_name}</p>
-                    <p className="text-zinc-500 text-xs">{e.amount_grams}г</p>
+          <div key={meal} className="mb-3">
+            <div className="bg-[#111] border border-white/[0.07] rounded-2xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.05]">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-7 h-7 ${colorClass} rounded-lg flex items-center justify-center`}>
+                    <span className="text-xs font-bold">{MEAL_LABELS[meal]?.[0]}</span>
                   </div>
-                  <p className="text-zinc-400 text-sm">{Math.round(e.calories)} ккал</p>
+                  <span className="text-white font-semibold text-sm">{MEAL_LABELS[meal]}</span>
                 </div>
-              ))}
-              <Link
-                href={`/nutrition/add?meal=${meal}`}
-                className="border border-dashed border-zinc-700 rounded-xl py-3 flex items-center justify-center gap-2 text-zinc-500 text-sm"
-              >
-                <Plus className="w-4 h-4" />
-                Добавить {MEAL_LABELS[meal].toLowerCase()}
-              </Link>
+                <div className="flex items-center gap-3">
+                  {mealCals > 0 && <span className="text-zinc-500 text-xs font-medium">{Math.round(mealCals)} ккал</span>}
+                  <Link
+                    href={`/nutrition/add?meal=${meal}`}
+                    className="w-7 h-7 bg-zinc-800 rounded-lg flex items-center justify-center"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-zinc-400" />
+                  </Link>
+                </div>
+              </div>
+              {mealEntries.length > 0 && (
+                <div className="px-4 py-2">
+                  {mealEntries.map((e, idx) => (
+                    <div
+                      key={e.id}
+                      className={`flex justify-between items-center py-2.5 ${idx < mealEntries.length - 1 ? 'border-b border-white/[0.04]' : ''}`}
+                    >
+                      <div>
+                        <p className="text-white text-sm font-medium">{e.food_name}</p>
+                        <p className="text-zinc-600 text-xs">{e.amount_grams}г</p>
+                      </div>
+                      <p className="text-zinc-400 text-sm font-semibold">{Math.round(e.calories)} ккал</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )

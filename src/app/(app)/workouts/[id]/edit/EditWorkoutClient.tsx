@@ -49,9 +49,7 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
   const [newExEquipment, setNewExEquipment] = useState('')
   const [creating, setCreating] = useState(false)
 
-  useEffect(() => {
-    loadExercises()
-  }, [])
+  useEffect(() => { loadExercises() }, [])
 
   async function loadExercises() {
     const { data } = await supabase.from('exercises').select('*').order('muscle_group')
@@ -74,17 +72,10 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
     if (!newExName.trim()) return
     setCreating(true)
     const { data: ex } = await supabase.from('exercises').insert({
-      name: newExName.trim(),
-      muscle_group: newExGroup,
-      equipment: newExEquipment.trim() || null,
+      name: newExName.trim(), muscle_group: newExGroup, equipment: newExEquipment.trim() || null,
     }).select().single()
-    if (ex) {
-      await loadExercises()
-      addExercise(ex as Exercise)
-    }
-    setNewExName('')
-    setNewExEquipment('')
-    setNewExGroup('Другое')
+    if (ex) { await loadExercises(); addExercise(ex as Exercise) }
+    setNewExName(''); setNewExEquipment(''); setNewExGroup('Другое')
     setCreating(false)
   }
 
@@ -116,22 +107,13 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
   async function handleSave() {
     if (!name.trim() || exercises.length === 0) return
     setSaving(true)
-
-    // Update workout name
     await supabase.from('workouts').update({ name: name.trim() }).eq('id', initial.id)
-
-    // Delete all existing workout_exercises (cascade deletes sets)
     await supabase.from('workout_exercises').delete().eq('workout_id', initial.id)
-
-    // Re-insert everything
     for (let i = 0; i < exercises.length; i++) {
       const ex = exercises[i]!
       const { data: we } = await supabase.from('workout_exercises').insert({
-        workout_id: initial.id,
-        exercise_id: ex.exercise_id,
-        order: i,
+        workout_id: initial.id, exercise_id: ex.exercise_id, order: i,
       }).select().single()
-
       if (we && ex.sets.length > 0) {
         await supabase.from('workout_sets').insert(
           ex.sets.map((s, j) => ({
@@ -144,7 +126,6 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
         )
       }
     }
-
     router.push(`/workouts/${initial.id}`)
     router.refresh()
   }
@@ -153,19 +134,18 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
     e.name.toLowerCase().includes(search.toLowerCase()) ||
     e.muscle_group.toLowerCase().includes(search.toLowerCase())
   )
-
   const grouped: Record<string, Exercise[]> = {}
   for (const e of filtered) {
     if (!grouped[e.muscle_group]) grouped[e.muscle_group] = []
     grouped[e.muscle_group]!.push(e)
   }
 
-  const inputClass = "px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-sm focus:outline-none focus:border-indigo-500 w-full"
+  const inputClass = "px-3 py-2.5 rounded-xl bg-zinc-800 border border-white/[0.07] text-white text-sm focus:outline-none focus:border-blue-500 w-full"
 
   return (
-    <div className="px-4 py-6 max-w-lg mx-auto">
+    <div className="px-4 pt-6 pb-8 max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <Link href={`/workouts/${initial.id}`} className="w-9 h-9 bg-zinc-900 rounded-xl flex items-center justify-center flex-shrink-0">
+        <Link href={`/workouts/${initial.id}`} className="w-10 h-10 bg-[#111] border border-white/[0.07] rounded-xl flex items-center justify-center flex-shrink-0">
           <ArrowLeft className="w-5 h-5 text-white" />
         </Link>
         <input
@@ -176,29 +156,34 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
       </div>
 
       {exercises.map((ex, exIdx) => (
-        <div key={exIdx} className="bg-zinc-900 border border-zinc-800 rounded-2xl mb-3 overflow-hidden">
+        <div key={exIdx} className="bg-[#111] border border-white/[0.07] rounded-2xl mb-3 overflow-hidden">
           <div
-            className="flex items-center justify-between px-4 py-3 cursor-pointer"
+            className="flex items-center justify-between px-4 py-3.5 cursor-pointer"
             onClick={() => setExercises(prev => prev.map((e, i) => i === exIdx ? { ...e, expanded: !e.expanded } : e))}
           >
-            <p className="text-white font-medium">{ex.exercise_name}</p>
+            <div className="flex items-center gap-3">
+              <div className="w-7 h-7 bg-blue-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <span className="text-blue-400 text-xs font-bold">{exIdx + 1}</span>
+              </div>
+              <p className="text-white font-semibold">{ex.exercise_name}</p>
+            </div>
             <div className="flex items-center gap-2">
-              <span className="text-zinc-500 text-sm">{ex.sets.length} подх.</span>
-              {ex.expanded ? <ChevronUp className="w-4 h-4 text-zinc-500" /> : <ChevronDown className="w-4 h-4 text-zinc-500" />}
+              <span className="text-zinc-600 text-xs">{ex.sets.length} подх.</span>
+              {ex.expanded ? <ChevronUp className="w-4 h-4 text-zinc-600" /> : <ChevronDown className="w-4 h-4 text-zinc-600" />}
             </div>
           </div>
 
           {ex.expanded && (
-            <div className="px-4 pb-4">
-              <div className="flex text-zinc-500 text-xs mb-2 gap-4 px-1">
-                <span className="w-8 text-center">#</span>
+            <div className="px-4 pb-4 border-t border-white/[0.05]">
+              <div className="flex text-zinc-600 text-xs mb-2 gap-3 px-1 pt-3">
+                <span className="w-6 text-center">#</span>
                 <span className="flex-1">Вес (кг)</span>
                 <span className="flex-1">Повторы</span>
                 <span className="w-8" />
               </div>
               {ex.sets.map((s, sIdx) => (
                 <div key={sIdx} className="flex items-center gap-3 mb-2">
-                  <span className="w-8 text-center text-zinc-500 text-sm">{sIdx + 1}</span>
+                  <span className="w-6 text-center text-zinc-600 text-sm font-semibold">{sIdx + 1}</span>
                   <input
                     className={inputClass}
                     type="number"
@@ -216,7 +201,7 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
                   />
                   <button
                     onClick={() => removeSet(exIdx, sIdx)}
-                    className="w-8 h-8 flex items-center justify-center text-zinc-600 flex-shrink-0"
+                    className="w-9 h-9 flex items-center justify-center text-zinc-600 flex-shrink-0"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -225,13 +210,13 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
               <div className="flex gap-2 mt-3">
                 <button
                   onClick={() => addSet(exIdx)}
-                  className="flex-1 py-2 rounded-lg border border-dashed border-zinc-700 text-zinc-500 text-sm"
+                  className="flex-1 py-2.5 rounded-xl border border-dashed border-zinc-700 text-zinc-500 text-sm font-medium"
                 >
                   + Подход
                 </button>
                 <button
                   onClick={() => removeExercise(exIdx)}
-                  className="w-10 h-9 flex items-center justify-center bg-red-900/30 rounded-lg text-red-400"
+                  className="w-11 h-10 flex items-center justify-center bg-red-500/10 border border-red-500/20 rounded-xl text-red-400"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -243,7 +228,7 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
 
       <button
         onClick={() => setShowPicker(true)}
-        className="w-full py-3 rounded-2xl border border-dashed border-zinc-700 text-zinc-400 flex items-center justify-center gap-2 mb-6"
+        className="w-full py-3.5 rounded-2xl border border-dashed border-zinc-700 text-zinc-500 flex items-center justify-center gap-2 mb-6 font-medium"
       >
         <Plus className="w-5 h-5" />
         Добавить упражнение
@@ -252,30 +237,29 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
       <button
         onClick={handleSave}
         disabled={saving || exercises.length === 0}
-        className="w-full py-4 rounded-2xl bg-indigo-500 text-white font-semibold text-base disabled:opacity-40"
+        className="w-full py-4 rounded-2xl bg-blue-600 text-white font-bold text-base disabled:opacity-40 active:bg-blue-700 transition-colors"
       >
         {saving ? 'Сохраняю...' : 'Сохранить изменения'}
       </button>
 
-      {/* Exercise picker modal */}
       {showPicker && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex flex-col">
-          <div className="flex-1 flex flex-col bg-zinc-950 mt-16 rounded-t-3xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-4 border-b border-zinc-800">
-              <h2 className="text-white font-semibold">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col">
+          <div className="flex-1 flex flex-col bg-[#0d0d0d] mt-12 rounded-t-3xl overflow-hidden border-t border-white/[0.07]">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-white/[0.07]">
+              <h2 className="text-white font-bold text-lg">
                 {showCreate ? 'Новое упражнение' : 'Выбери упражнение'}
               </h2>
-              <button onClick={() => { setShowPicker(false); setShowCreate(false) }} className="text-zinc-400">
-                <X className="w-5 h-5" />
+              <button onClick={() => { setShowPicker(false); setShowCreate(false) }} className="w-8 h-8 bg-zinc-800 rounded-xl flex items-center justify-center">
+                <X className="w-4 h-4 text-zinc-400" />
               </button>
             </div>
 
             {showCreate ? (
               <div className="px-4 py-4 flex flex-col gap-3">
                 <div>
-                  <label className="text-zinc-400 text-sm mb-1 block">Название упражнения</label>
+                  <label className="text-zinc-500 text-xs font-semibold uppercase tracking-wider mb-2 block">Название</label>
                   <input
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-white/[0.07] text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500"
                     placeholder="Например: Тяга Т-грифа"
                     value={newExName}
                     onChange={e => setNewExName(e.target.value)}
@@ -283,9 +267,9 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
                   />
                 </div>
                 <div>
-                  <label className="text-zinc-400 text-sm mb-1 block">Группа мышц</label>
+                  <label className="text-zinc-500 text-xs font-semibold uppercase tracking-wider mb-2 block">Группа мышц</label>
                   <select
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-white focus:outline-none"
+                    className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-white/[0.07] text-white focus:outline-none"
                     value={newExGroup}
                     onChange={e => setNewExGroup(e.target.value)}
                   >
@@ -293,9 +277,9 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
                   </select>
                 </div>
                 <div>
-                  <label className="text-zinc-400 text-sm mb-1 block">Оборудование (необязательно)</label>
+                  <label className="text-zinc-500 text-xs font-semibold uppercase tracking-wider mb-2 block">Оборудование (необязательно)</label>
                   <input
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-white/[0.07] text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500"
                     placeholder="Штанга, Гантели..."
                     value={newExEquipment}
                     onChange={e => setNewExEquipment(e.target.value)}
@@ -304,7 +288,7 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
                 <button
                   onClick={createAndAdd}
                   disabled={!newExName.trim() || creating}
-                  className="w-full py-3 rounded-xl bg-indigo-500 text-white font-semibold disabled:opacity-40 mt-1"
+                  className="w-full py-3.5 rounded-xl bg-blue-600 text-white font-bold disabled:opacity-40 mt-1"
                 >
                   {creating ? 'Создаю...' : 'Создать и добавить'}
                 </button>
@@ -316,31 +300,31 @@ export default function EditWorkoutClient({ workout: initial, initialExercises }
               <>
                 <div className="px-4 py-3">
                   <input
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none"
-                    placeholder="Поиск..."
+                    className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-white/[0.07] text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500"
+                    placeholder="Поиск упражнения..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     autoFocus
                   />
                 </div>
-                <div className="flex-1 overflow-y-auto px-4">
+                <div className="flex-1 overflow-y-auto px-4 pb-4">
                   <button
                     onClick={() => setShowCreate(true)}
-                    className="w-full text-left px-4 py-3 rounded-xl border border-dashed border-indigo-700 bg-indigo-950/40 mb-4 flex items-center gap-3"
+                    className="w-full text-left px-4 py-3 rounded-xl border border-dashed border-blue-600/40 bg-blue-600/10 mb-4 flex items-center gap-3"
                   >
-                    <Plus className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-                    <span className="text-indigo-300 text-sm font-medium">Создать своё упражнение</span>
+                    <Plus className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                    <span className="text-blue-400 text-sm font-semibold">Создать своё упражнение</span>
                   </button>
                   {Object.entries(grouped).map(([group, exs]) => (
                     <div key={group} className="mb-4">
-                      <p className="text-zinc-500 text-xs font-medium mb-2">{group}</p>
+                      <p className="text-zinc-600 text-xs font-semibold uppercase tracking-wider mb-2">{group}</p>
                       {exs.map(ex => (
                         <button
                           key={ex.id}
                           onClick={() => addExercise(ex)}
-                          className="w-full text-left px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 mb-2 flex justify-between items-center"
+                          className="w-full text-left px-4 py-3 rounded-xl bg-zinc-900 border border-white/[0.05] mb-2 flex justify-between items-center active:bg-zinc-800"
                         >
-                          <span className="text-white">{ex.name}</span>
+                          <span className="text-white font-medium">{ex.name}</span>
                           <span className="text-zinc-600 text-xs">{ex.equipment}</span>
                         </button>
                       ))}
