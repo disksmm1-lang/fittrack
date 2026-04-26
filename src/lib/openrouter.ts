@@ -27,7 +27,9 @@ export async function chatWithAI(messages: Message[], model = 'deepseek/deepseek
   }
 
   const data = await response.json()
-  const content = data.choices[0].message.content
+  console.log('OpenRouter response:', JSON.stringify(data).slice(0, 500))
+  const content = data.choices?.[0]?.message?.content
+  if (!content) throw new Error(`No content in response: ${JSON.stringify(data).slice(0, 200)}`)
   if (Array.isArray(content)) {
     const textBlock = content.find((b: { type: string; text?: string }) => b.type === 'text')
     return (textBlock?.text ?? '') as string
