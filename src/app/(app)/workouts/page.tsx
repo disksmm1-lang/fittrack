@@ -25,7 +25,8 @@ export default async function WorkoutsPage() {
 
   const grouped: Record<string, typeof workouts> = {}
   for (const w of workouts ?? []) {
-    const month = new Date(w.date).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+    const [wy, wm, wd] = w.date.split('-').map(Number)
+    const month = new Date(wy!, wm! - 1, wd!).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
     if (!grouped[month]) grouped[month] = []
     grouped[month]!.push(w)
   }
@@ -104,7 +105,7 @@ export default async function WorkoutsPage() {
                     <div>
                       <p className="text-white font-semibold">{w.name}</p>
                       <p className="text-zinc-500 text-xs mt-0.5">
-                        {new Date(w.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', weekday: 'short' })}
+                        {(() => { const [y, m, d] = w.date.split('-').map(Number); return new Date(y!, m! - 1, d!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', weekday: 'short' }) })()}
                         {w.duration_minutes ? ` · ${w.duration_minutes} мин` : ''}
                       </p>
                     </div>

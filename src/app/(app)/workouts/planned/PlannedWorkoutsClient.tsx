@@ -317,7 +317,7 @@ export default function PlannedWorkoutsClient({
                     <p className="text-white font-semibold">{pw.name}</p>
                     {pw.scheduled_date ? (
                       <p className="text-zinc-500 text-xs">
-                        {new Date(pw.scheduled_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short' })}
+                        {(() => { const [y, m, d] = pw.scheduled_date!.split('-').map(Number); return new Date(y!, m! - 1, d!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short' }) })()}
                       </p>
                     ) : (
                       <p className="text-zinc-600 text-xs">Дата не указана</p>
