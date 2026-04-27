@@ -45,20 +45,19 @@ interface Props {
   tdee: number | null
 }
 
-export default function CardioSection({ entries, today, profileWeight, bmr, tdee }: Props) {
+export default function CardioSection({ entries: initial, today, profileWeight, bmr, tdee }: Props) {
   const supabase = createClient()
   const router = useRouter()
 
+  const [items, setItems] = useState(initial)
   const [showForm, setShowForm] = useState(false)
   const [activityType, setActivityType] = useState('walking')
   const [duration, setDuration] = useState('')
   const [calories, setCalories] = useState('')
   const [calcLoading, setCalcLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const totalBurned = entries.reduce((s, e) => s + e.calories_burned, 0)
-  const baseCalories = tdee ? Math.round(tdee / 24 * 24) : null // TDEE за день = базовый расход
+  const totalBurned = items.reduce((s, e) => s + e.calories_burned, 0)
 
   async function calcCalories() {
     if (!duration) return
@@ -80,27 +79,33 @@ export default function CardioSection({ entries, today, profileWeight, bmr, tdee
   async function save() {
     if (!duration || !calories) return
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('cardio_entries').insert({
-      user_id: user.id,
-      date: today,
+    const newItem = {
+      id: crypto.randomUUID(),
       activity_type: activityType,
       duration_minutes: Number(duration),
       calories_burned: Number(calories),
-    })
+    }
+    setItems(prev => [...prev, newItem])
     setShowForm(false)
     setDuration('')
     setCalories('')
     setActivityType('walking')
     setSaving(false)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('cardio_entries').insert({
+      user_id: user.id,
+      date: today,
+      activity_type: newItem.activity_type,
+      duration_minutes: newItem.duration_minutes,
+      calories_burned: newItem.calories_burned,
+    })
     router.refresh()
   }
 
   async function remove(id: string) {
-    setDeletingId(id)
+    setItems(prev => prev.filter(e => e.id !== id))
     await supabase.from('cardio_entries').delete().eq('id', id)
-    setDeletingId(null)
     router.refresh()
   }
 
@@ -155,7 +160,7 @@ export default function CardioSection({ entries, today, profileWeight, bmr, tdee
         )}
 
         {/* Записи активности */}
-        {entries.map(entry => {
+        {items.map(entry => {
           const act = ACTIVITIES.find(a => a.key === entry.activity_type)
           return (
             <div key={entry.id} className="px-4 py-2.5 flex items-center justify-between border-b border-white/[0.04] last:border-0">
@@ -170,7 +175,7 @@ export default function CardioSection({ entries, today, profileWeight, bmr, tdee
                 <span className="text-red-400 text-sm font-semibold">−{entry.calories_burned} ккал</span>
                 <button
                   onClick={() => remove(entry.id)}
-                  disabled={deletingId === entry.id}
+                  disabled={saving}
                   className="w-6 h-6 flex items-center justify-center text-zinc-700 hover:text-red-400 transition-colors"
                 >
                   <X className="w-3.5 h-3.5" />

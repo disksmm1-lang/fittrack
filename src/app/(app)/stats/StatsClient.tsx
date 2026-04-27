@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useTransition } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import { Scale, TrendingUp, Dumbbell, Flame, CalendarDays, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 
 type Period = 'today' | '7d' | '30d' | '90d' | 'custom'
 
@@ -46,6 +47,7 @@ function fmt(dateStr: string, short = false) {
 
 export default function StatsClient({ foodByDay, workouts, weightHistory, muscleGroups, kbjuGoal, today, profileWeight, cardioByDay }: Props) {
   const supabase = createClient()
+  const router = useRouter()
   const [period, setPeriod] = useState<Period>('30d')
   const [showCalendar, setShowCalendar] = useState(false)
   const [customFrom, setCustomFrom] = useState('')
@@ -159,7 +161,7 @@ export default function StatsClient({ foodByDay, workouts, weightHistory, muscle
     await supabase.from('weight_history').upsert({ date: today, weight: w })
     setWeightInput('')
     setSavingWeight(false)
-    window.location.reload()
+    router.refresh()
   }
 
   const periodBtns: { label: string; value: Period }[] = [

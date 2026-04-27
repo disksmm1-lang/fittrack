@@ -15,31 +15,28 @@ interface FoodEntry {
   carbs_g: number
 }
 
-export default function FoodEntries({ entries }: { entries: FoodEntry[] }) {
+export default function FoodEntries({ entries: initial }: { entries: FoodEntry[] }) {
   const supabase = createClient()
   const router = useRouter()
+  const [items, setItems] = useState(initial)
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   async function handleDelete(id: string) {
-    setDeletingId(id)
-    await supabase.from('food_entries').delete().eq('id', id)
+    setItems(prev => prev.filter(e => e.id !== id))
     setActiveId(null)
-    setDeletingId(null)
+    await supabase.from('food_entries').delete().eq('id', id)
     router.refresh()
   }
 
   return (
     <div className="px-4 py-2">
-      {entries.map((e, idx) => {
+      {items.map((e, idx) => {
         const isActive = activeId === e.id
-        const isDeleting = deletingId === e.id
         return (
           <div
             key={e.id}
-            className={`relative flex items-center py-2.5 ${idx < entries.length - 1 ? 'border-b border-white/[0.04]' : ''}`}
+            className={`relative flex items-center py-2.5 ${idx < items.length - 1 ? 'border-b border-white/[0.04]' : ''}`}
           >
-            {/* Основная строка */}
             <div
               className="flex-1 flex justify-between items-center cursor-pointer select-none"
               onClick={() => setActiveId(isActive ? null : e.id)}
@@ -53,13 +50,9 @@ export default function FoodEntries({ entries }: { entries: FoodEntry[] }) {
                 {isActive && (
                   <button
                     onClick={ev => { ev.stopPropagation(); handleDelete(e.id) }}
-                    disabled={isDeleting}
                     className="w-8 h-8 bg-red-500/15 border border-red-500/30 rounded-lg flex items-center justify-center flex-shrink-0 active:bg-red-500/30 transition-colors"
                   >
-                    {isDeleting
-                      ? <span className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin block" />
-                      : <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                    }
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
                   </button>
                 )}
               </div>
