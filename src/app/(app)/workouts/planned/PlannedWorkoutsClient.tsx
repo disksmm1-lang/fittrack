@@ -180,7 +180,7 @@ export default function PlannedWorkoutsClient({
           <div className="flex flex-col gap-3">
             <input className={inputClass} placeholder="Название тренировки" value={newName} onChange={e => setNewName(e.target.value)} />
             <input className={inputClass} placeholder="Описание (необязательно)" value={newDesc} onChange={e => setNewDesc(e.target.value)} />
-            <input className={inputClass} type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
+            <input className={inputClass} type="date" min={new Date().toLocaleDateString('en-CA')} value={newDate} onChange={e => setNewDate(e.target.value)} />
 
             {newExercises.length > 0 && (
               <div className="flex flex-col gap-2 mt-1">
@@ -270,6 +270,7 @@ export default function PlannedWorkoutsClient({
               <input
                 className={inputClass}
                 type="date"
+                min={new Date().toLocaleDateString('en-CA')}
                 placeholder="Дата (необязательно)"
                 value={aiDate}
                 onChange={e => setAiDate(e.target.value)}
