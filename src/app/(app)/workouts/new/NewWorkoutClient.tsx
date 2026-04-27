@@ -1,18 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, Trash2, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, ChevronDown, ChevronUp, X, Check } from 'lucide-react'
 import Link from 'next/link'
 import type { Exercise } from '@/types'
 
 interface SetForm {
+  id?: string
   weight_kg: string
   reps: string
 }
 
 interface ExerciseForm {
+  weId?: string
   exercise_id: string
   exercise_name: string
   sets: SetForm[]
@@ -43,7 +45,8 @@ export default function NewWorkoutClient({ plannedTemplate }: { plannedTemplate?
   const [allExercises, setAllExercises] = useState<Exercise[]>([])
   const [showPicker, setShowPicker] = useState(false)
   const [search, setSearch] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [finishing, setFinishing] = useState(false)
+  const [initDone, setInitDone] = useState(false)
 
   const [showCreate, setShowCreate] = useState(false)
   const [newExName, setNewExName] = useState('')
@@ -51,29 +54,49 @@ export default function NewWorkoutClient({ plannedTemplate }: { plannedTemplate?
   const [newExEquipment, setNewExEquipment] = useState('')
   const [creating, setCreating] = useState(false)
 
-  useEffect(() => { loadExercises() }, [])
+  const workoutIdRef = useRef<string | null>(null)
+  const startTimeRef = useRef<Date>(new Date())
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   useEffect(() => {
+    initWorkout()
+  }, [])
+
+  useEffect(() => {
+    if (!initDone) return
     if (!plannedTemplate || allExercises.length === 0) return
     buildExercisesFromTemplate()
-  }, [allExercises])
+  }, [allExercises, initDone])
 
-  async function loadExercises() {
-    const { data } = await supabase.from('exercises').select('*').order('muscle_group')
-    if (data) setAllExercises(data as Exercise[])
+  async function initWorkout() {
+    const [{ data: { user } }, { data: exList }] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase.from('exercises').select('*').order('muscle_group'),
+    ])
+    if (!user) return
+
+    const today = new Date()
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+    const { data: workout } = await supabase
+      .from('workouts')
+      .insert({ user_id: user.id, date: dateStr, name: name.trim() })
+      .select()
+      .single()
+
+    if (workout) workoutIdRef.current = workout.id
+    if (exList) setAllExercises(exList as Exercise[])
+    setInitDone(true)
   }
 
   async function buildExercisesFromTemplate() {
-    if (!plannedTemplate) return
+    if (!plannedTemplate || !workoutIdRef.current) return
     const built: ExerciseForm[] = []
 
     for (const tEx of plannedTemplate.exercises) {
-      // Find matching exercise by name (case-insensitive)
       let found = allExercises.find(e =>
         e.name.toLowerCase() === tEx.exercise_name.toLowerCase()
       )
-
-      // If not found — create it
       if (!found) {
         const { data: created } = await supabase.from('exercises').insert({
           name: tEx.exercise_name,
@@ -85,32 +108,62 @@ export default function NewWorkoutClient({ plannedTemplate }: { plannedTemplate?
           setAllExercises(prev => [...prev, found!])
         }
       }
-
       if (!found) continue
 
-      // Build sets from template
-      const setsCount = typeof tEx.sets === 'number' ? tEx.sets : 3
-      const sets: SetForm[] = Array.from({ length: setsCount }, () => ({
-        weight_kg: tEx.weight_kg ?? '',
-        reps: '',
-      }))
-
-      built.push({
+      const { data: we } = await supabase.from('workout_exercises').insert({
+        workout_id: workoutIdRef.current,
         exercise_id: found.id,
-        exercise_name: found.name,
-        sets,
-        expanded: true,
-      })
+        order: built.length,
+      }).select().single()
+      if (!we) continue
+
+      const setsCount = typeof tEx.sets === 'number' ? tEx.sets : 3
+      const sets: SetForm[] = await Promise.all(
+        Array.from({ length: setsCount }, async (_, j) => {
+          const { data: s } = await supabase.from('workout_sets').insert({
+            workout_exercise_id: we.id,
+            set_number: j + 1,
+            weight_kg: tEx.weight_kg ? parseFloat(tEx.weight_kg) : null,
+            reps: null,
+            completed: false,
+          }).select().single()
+          return { id: s?.id, weight_kg: tEx.weight_kg ?? '', reps: '' }
+        })
+      )
+
+      built.push({ weId: we.id, exercise_id: found.id, exercise_name: found.name, sets, expanded: true })
     }
 
     setExercises(built)
   }
 
-  function addExercise(ex: Exercise) {
+  async function loadExercises() {
+    const { data } = await supabase.from('exercises').select('*').order('muscle_group')
+    if (data) setAllExercises(data as Exercise[])
+  }
+
+  async function addExercise(ex: Exercise) {
+    if (!workoutIdRef.current) return
+    const { data: we } = await supabase.from('workout_exercises').insert({
+      workout_id: workoutIdRef.current,
+      exercise_id: ex.id,
+      order: exercises.length,
+    }).select().single()
+    if (!we) return
+
+    const { data: s } = await supabase.from('workout_sets').insert({
+      workout_exercise_id: we.id,
+      set_number: 1,
+      weight_kg: null,
+      reps: null,
+      completed: false,
+    }).select().single()
+
     setExercises(prev => [...prev, {
+      weId: we.id,
       exercise_id: ex.id,
       exercise_name: ex.name,
-      sets: [{ weight_kg: '', reps: '' }],
+      sets: [{ id: s?.id, weight_kg: '', reps: '' }],
       expanded: true,
     }])
     setShowPicker(false)
@@ -126,56 +179,79 @@ export default function NewWorkoutClient({ plannedTemplate }: { plannedTemplate?
       muscle_group: newExGroup,
       equipment: newExEquipment.trim() || null,
     }).select().single()
-    if (ex) { await loadExercises(); addExercise(ex as Exercise) }
+    if (ex) { await loadExercises(); await addExercise(ex as Exercise) }
     setNewExName(''); setNewExEquipment(''); setNewExGroup('Другое')
     setCreating(false)
   }
 
-  function addSet(idx: number) {
-    setExercises(prev => prev.map((e, i) => i === idx
-      ? { ...e, sets: [...e.sets, { weight_kg: e.sets[e.sets.length - 1]?.weight_kg ?? '', reps: '' }] }
+  async function addSet(exIdx: number) {
+    const ex = exercises[exIdx]
+    if (!ex?.weId) return
+
+    const newSetNumber = ex.sets.length + 1
+    const lastSet = ex.sets[ex.sets.length - 1]
+    const { data: s } = await supabase.from('workout_sets').insert({
+      workout_exercise_id: ex.weId,
+      set_number: newSetNumber,
+      weight_kg: lastSet?.weight_kg ? parseFloat(lastSet.weight_kg) : null,
+      reps: null,
+      completed: false,
+    }).select().single()
+
+    setExercises(prev => prev.map((e, i) => i === exIdx
+      ? { ...e, sets: [...e.sets, { id: s?.id, weight_kg: lastSet?.weight_kg ?? '', reps: '' }] }
       : e
     ))
   }
 
-  function removeExercise(idx: number) {
-    setExercises(prev => prev.filter((_, i) => i !== idx))
+  async function removeExercise(exIdx: number) {
+    const ex = exercises[exIdx]
+    if (ex?.weId) {
+      await supabase.from('workout_exercises').delete().eq('id', ex.weId)
+    }
+    setExercises(prev => prev.filter((_, i) => i !== exIdx))
   }
+
+  const scheduleSetSave = useCallback((setId: string, weId: string, weight_kg: string, reps: string) => {
+    if (saveTimers.current[setId]) clearTimeout(saveTimers.current[setId])
+    saveTimers.current[setId] = setTimeout(async () => {
+      await supabase.from('workout_sets').update({
+        weight_kg: weight_kg ? parseFloat(weight_kg) : null,
+        reps: reps ? parseInt(reps) : null,
+        completed: !!(weight_kg || reps),
+      }).eq('id', setId)
+    }, 600)
+  }, [])
 
   function updateSet(exIdx: number, setIdx: number, field: keyof SetForm, value: string) {
-    setExercises(prev => prev.map((e, i) => i === exIdx
-      ? { ...e, sets: e.sets.map((s, j) => j === setIdx ? { ...s, [field]: value } : s) }
-      : e
-    ))
+    setExercises(prev => {
+      const updated = prev.map((e, i) => i === exIdx
+        ? { ...e, sets: e.sets.map((s, j) => j === setIdx ? { ...s, [field]: value } : s) }
+        : e
+      )
+      const updatedEx = updated[exIdx]
+      const updatedSet = updatedEx?.sets[setIdx]
+      if (updatedSet?.id) {
+        scheduleSetSave(updatedSet.id, updatedEx!.weId!, updatedSet.weight_kg, updatedSet.reps)
+      }
+      return updated
+    })
   }
 
-  async function handleSave() {
-    if (!name.trim() || exercises.length === 0) return
-    setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data: workout } = await supabase.from('workouts').insert({
-      user_id: user.id,
-      date: new Date().toISOString().split('T')[0],
+  async function handleFinish() {
+    if (!workoutIdRef.current) return
+    setFinishing(true)
+    const durationMinutes = Math.round((Date.now() - startTimeRef.current.getTime()) / 60000)
+    await supabase.from('workouts').update({
       name: name.trim(),
-    }).select().single()
-    if (!workout) { setSaving(false); return }
-    for (let i = 0; i < exercises.length; i++) {
-      const ex = exercises[i]!
-      const { data: we } = await supabase.from('workout_exercises').insert({
-        workout_id: workout.id, exercise_id: ex.exercise_id, order: i,
-      }).select().single()
-      if (we) {
-        await supabase.from('workout_sets').insert(
-          ex.sets.map((s, j) => ({
-            workout_exercise_id: we.id,
-            set_number: j + 1,
-            weight_kg: s.weight_kg ? parseFloat(s.weight_kg) : null,
-            reps: s.reps ? parseInt(s.reps) : null,
-            completed: true,
-          }))
-        )
-      }
+      duration_minutes: durationMinutes > 0 ? durationMinutes : null,
+    }).eq('id', workoutIdRef.current)
+    router.push('/workouts')
+  }
+
+  async function handleDiscard() {
+    if (workoutIdRef.current) {
+      await supabase.from('workouts').delete().eq('id', workoutIdRef.current)
     }
     router.push('/workouts')
   }
@@ -195,18 +271,24 @@ export default function NewWorkoutClient({ plannedTemplate }: { plannedTemplate?
   return (
     <div className="px-4 pt-6 pb-8 max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/workouts" className="w-10 h-10 bg-[#111] border border-white/[0.07] rounded-xl flex items-center justify-center flex-shrink-0">
+        <button
+          onClick={handleDiscard}
+          className="w-10 h-10 bg-[#111] border border-white/[0.07] rounded-xl flex items-center justify-center flex-shrink-0"
+        >
           <ArrowLeft className="w-5 h-5 text-white" />
-        </Link>
+        </button>
         <input
           value={name}
           onChange={e => setName(e.target.value)}
           className="flex-1 bg-transparent text-xl font-bold text-white focus:outline-none"
         />
+        {!initDone && (
+          <span className="text-zinc-600 text-xs">Создаю...</span>
+        )}
       </div>
 
       {exercises.map((ex, exIdx) => (
-        <div key={exIdx} className="bg-[#111] border border-white/[0.07] rounded-2xl mb-3 overflow-hidden">
+        <div key={ex.weId ?? exIdx} className="bg-[#111] border border-white/[0.07] rounded-2xl mb-3 overflow-hidden">
           <div
             className="flex items-center justify-between px-4 py-3.5 cursor-pointer"
             onClick={() => setExercises(prev => prev.map((e, i) => i === exIdx ? { ...e, expanded: !e.expanded } : e))}
@@ -231,7 +313,7 @@ export default function NewWorkoutClient({ plannedTemplate }: { plannedTemplate?
                 <span className="flex-1">Повторы</span>
               </div>
               {ex.sets.map((s, sIdx) => (
-                <div key={sIdx} className="flex items-center gap-3 mb-2">
+                <div key={s.id ?? sIdx} className="flex items-center gap-3 mb-2">
                   <span className="w-6 text-center text-zinc-600 text-sm font-semibold">{sIdx + 1}</span>
                   <input
                     className={inputClass}
@@ -271,18 +353,20 @@ export default function NewWorkoutClient({ plannedTemplate }: { plannedTemplate?
 
       <button
         onClick={() => setShowPicker(true)}
-        className="w-full py-3.5 rounded-2xl border border-dashed border-zinc-700 text-zinc-500 flex items-center justify-center gap-2 mb-6 font-medium"
+        disabled={!initDone}
+        className="w-full py-3.5 rounded-2xl border border-dashed border-zinc-700 text-zinc-500 flex items-center justify-center gap-2 mb-6 font-medium disabled:opacity-40"
       >
         <Plus className="w-5 h-5" />
         Добавить упражнение
       </button>
 
       <button
-        onClick={handleSave}
-        disabled={saving || exercises.length === 0}
-        className="w-full py-4 rounded-2xl bg-blue-600 text-white font-bold text-base disabled:opacity-40 active:bg-blue-700 transition-colors"
+        onClick={handleFinish}
+        disabled={finishing || !initDone}
+        className="w-full py-4 rounded-2xl bg-blue-600 text-white font-bold text-base disabled:opacity-40 active:bg-blue-700 transition-colors flex items-center justify-center gap-2"
       >
-        {saving ? 'Сохраняю...' : 'Сохранить тренировку'}
+        <Check className="w-5 h-5" />
+        {finishing ? 'Завершаю...' : 'Завершить тренировку'}
       </button>
 
       {/* Exercise picker modal */}
