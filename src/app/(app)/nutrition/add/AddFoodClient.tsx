@@ -3,7 +3,7 @@
 import { useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Sparkles, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 const MEAL_LABELS: Record<string, string> = {
@@ -26,9 +26,33 @@ function AddFoodForm() {
     carbs_g: '',
   })
   const [saving, setSaving] = useState(false)
+  const [calculating, setCalculating] = useState(false)
 
   function update(field: string, value: string) {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  async function autoCalc() {
+    if (!form.food_name.trim() || !form.amount_grams) return
+    setCalculating(true)
+    try {
+      const res = await fetch('/api/ai/calc-food', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ food_name: form.food_name, amount_grams: parseFloat(form.amount_grams) }),
+      })
+      const data = await res.json()
+      if (data.calories != null) {
+        setForm(prev => ({
+          ...prev,
+          calories: String(data.calories),
+          protein_g: String(data.protein_g),
+          fat_g: String(data.fat_g),
+          carbs_g: String(data.carbs_g),
+        }))
+      }
+    } catch { /* ignore */ }
+    setCalculating(false)
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -89,6 +113,19 @@ function AddFoodForm() {
           required
         />
       </div>
+
+      <button
+        type="button"
+        onClick={autoCalc}
+        disabled={calculating || !form.food_name.trim() || !form.amount_grams}
+        className="w-full py-3 rounded-xl bg-purple-600/20 border border-purple-500/30 text-purple-400 font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-40 active:bg-purple-600/30 transition-colors"
+      >
+        {calculating ? (
+          <><Loader2 className="w-4 h-4 animate-spin" />Считаю КБЖУ...</>
+        ) : (
+          <><Sparkles className="w-4 h-4" />Рассчитать КБЖУ автоматически</>
+        )}
+      </button>
 
       <div className="grid grid-cols-2 gap-3">
         <div>

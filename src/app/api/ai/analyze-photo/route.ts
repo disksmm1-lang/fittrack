@@ -7,15 +7,18 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { image } = await req.json()
+  const { image, description } = await req.json()
   if (!image) return NextResponse.json({ error: 'No image' }, { status: 400 })
 
-  const raw = await analyzeNutritionPhoto(image)
-
+  let raw = ''
   try {
-    const result = JSON.parse(raw)
+    raw = await analyzeNutritionPhoto(image, description)
+    const jsonMatch = raw.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('No JSON found')
+    const result = JSON.parse(jsonMatch[0])
     return NextResponse.json(result)
-  } catch {
-    return NextResponse.json({ error: 'Failed to parse AI response', raw }, { status: 500 })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: msg, raw }, { status: 500 })
   }
 }

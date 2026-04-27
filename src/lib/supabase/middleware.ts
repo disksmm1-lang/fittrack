@@ -25,8 +25,11 @@ export async function updateSession(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login')
-  const isPublicPage = request.nextUrl.pathname === '/'
+  const path = request.nextUrl.pathname
+  const isAuthPage = path.startsWith('/login')
+  const isPublicPage = path === '/'
+  const isOnboarding = path.startsWith('/onboarding')
+  const isApiRoute = path.startsWith('/api')
 
   if (!user && !isAuthPage && !isPublicPage) {
     const url = request.nextUrl.clone()
@@ -38,6 +41,21 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
+  }
+
+  // Проверяем онбординг для залогиненных пользователей
+  if (user && !isAuthPage && !isPublicPage && !isOnboarding && !isApiRoute) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile?.onboarding_completed) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/onboarding'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse

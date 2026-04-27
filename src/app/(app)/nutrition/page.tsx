@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Camera } from 'lucide-react'
+import { calculateKBJU } from '@/lib/kbju'
+import FoodEntries from './FoodEntries'
 
 const MEAL_LABELS: Record<string, string> = {
   breakfast: 'Завтрак',
@@ -28,7 +30,7 @@ export default async function NutritionPage() {
 
   const [{ data: entries }, { data: profile }] = await Promise.all([
     supabase.from('food_entries').select('*').eq('user_id', user.id).eq('date', today).order('created_at'),
-    supabase.from('profiles').select('weight, height, age, gender, goal, activity_level').eq('id', user.id).single(),
+    supabase.from('profiles').select('weight, height, age, gender, goal, body_fat, work_type, training_days, training_intensity, activity_level').eq('id', user.id).single(),
   ])
 
   const totals = (entries ?? []).reduce(
@@ -41,18 +43,11 @@ export default async function NutritionPage() {
     { calories: 0, protein_g: 0, fat_g: 0, carbs_g: 0 }
   )
 
-  let calorieGoal = 2000
-  if (profile?.weight && profile?.height && profile?.age && profile?.gender) {
-    const bmr = profile.gender === 'male'
-      ? 10 * profile.weight + 6.25 * profile.height - 5 * profile.age + 5
-      : 10 * profile.weight + 6.25 * profile.height - 5 * profile.age - 161
-    const activityMultipliers: Record<string, number> = {
-      sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9
-    }
-    const multiplier = activityMultipliers[profile.activity_level ?? 'moderate'] ?? 1.55
-    const tdee = bmr * multiplier
-    calorieGoal = profile.goal === 'lose_weight' ? tdee - 500 : profile.goal === 'gain_muscle' ? tdee + 300 : tdee
-  }
+  const kbju = profile ? calculateKBJU(profile) : null
+  const calorieGoal = kbju?.calories ?? 2000
+  const proteinGoal = kbju?.protein ?? 150
+  const fatGoal = kbju?.fat ?? 60
+  const carbsGoal = kbju?.carbs ?? 200
 
   const progress = Math.min((totals.calories / calorieGoal) * 100, 100)
   const remaining = Math.max(0, calorieGoal - totals.calories)
@@ -102,13 +97,17 @@ export default async function NutritionPage() {
 
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Белки', value: totals.protein_g, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-            { label: 'Жиры', value: totals.fat_g, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
-            { label: 'Углеводы', value: totals.carbs_g, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-          ].map(({ label, value, color, bg }) => (
+            { label: 'Белки', value: totals.protein_g, goal: proteinGoal, color: 'text-blue-400', bg: 'bg-blue-500/10', bar: 'bg-blue-500' },
+            { label: 'Жиры', value: totals.fat_g, goal: fatGoal, color: 'text-yellow-400', bg: 'bg-yellow-500/10', bar: 'bg-yellow-500' },
+            { label: 'Углеводы', value: totals.carbs_g, goal: carbsGoal, color: 'text-orange-400', bg: 'bg-orange-500/10', bar: 'bg-orange-500' },
+          ].map(({ label, value, goal, color, bg, bar }) => (
             <div key={label} className={`${bg} rounded-xl px-3 py-2.5 text-center`}>
               <p className={`text-lg font-bold ${color} leading-none`}>{Math.round(value)}</p>
-              <p className="text-zinc-600 text-xs mt-1">{label}, г</p>
+              <p className="text-zinc-600 text-xs mt-0.5">из {Math.round(goal)}г</p>
+              <div className="mt-1.5 h-1 bg-black/20 rounded-full overflow-hidden">
+                <div className={`h-full ${bar} rounded-full`} style={{ width: `${Math.min((value / goal) * 100, 100)}%` }} />
+              </div>
+              <p className="text-zinc-600 text-xs mt-1">{label}</p>
             </div>
           ))}
         </div>
@@ -140,25 +139,13 @@ export default async function NutritionPage() {
                 </div>
               </div>
               {mealEntries.length > 0 && (
-                <div className="px-4 py-2">
-                  {mealEntries.map((e, idx) => (
-                    <div
-                      key={e.id}
-                      className={`flex justify-between items-center py-2.5 ${idx < mealEntries.length - 1 ? 'border-b border-white/[0.04]' : ''}`}
-                    >
-                      <div>
-                        <p className="text-white text-sm font-medium">{e.food_name}</p>
-                        <p className="text-zinc-600 text-xs">{e.amount_grams}г</p>
-                      </div>
-                      <p className="text-zinc-400 text-sm font-semibold">{Math.round(e.calories)} ккал</p>
-                    </div>
-                  ))}
-                </div>
+                <FoodEntries entries={mealEntries} />
               )}
             </div>
           </div>
         )
       })}
+
     </div>
   )
 }

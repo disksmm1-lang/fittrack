@@ -5,7 +5,7 @@ export interface Message {
   content: string | { type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }[]
 }
 
-export async function chatWithAI(messages: Message[], model = 'mistralai/mistral-small-3.2-24b-instruct') {
+export async function chatWithAI(messages: Message[], model = 'openai/gpt-4o-mini') {
   const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
     headers: {
@@ -32,24 +32,45 @@ export async function chatWithAI(messages: Message[], model = 'mistralai/mistral
   return content as string
 }
 
-export async function analyzeNutritionPhoto(base64Image: string) {
+export async function analyzeNutritionPhoto(base64Image: string, description?: string) {
+  const totalWeightMatch = description?.match(/(\d+)\s*г/i)
+  const totalWeight = totalWeightMatch ? parseInt(totalWeightMatch[1]!) : null
+
+  const descriptionHint = description
+    ? `\n\nПользователь сообщил: "${description}".${
+        totalWeight
+          ? ` Общий вес порции = ${totalWeight}г. Раздели этот вес между ингредиентами по визуальным пропорциям на фото (например, рис занимает 60% тарелки → ~${Math.round(totalWeight * 0.6)}г, котлеты 40% → ~${Math.round(totalWeight * 0.4)}г). Рассчитай КБЖУ каждого ингредиента по его весу и сложи.`
+          : ' Используй эти названия ингредиентов для точного определения КБЖУ.'
+      }`
+    : ''
+
   return chatWithAI([
     {
       role: 'user',
       content: [
         {
           type: 'text',
-          text: `Ты диетолог. Посмотри на фото еды и оцени примерный состав КБЖУ.
-Верни ТОЛЬКО JSON без markdown блоков, в формате:
+          text: `Ты опытный диетолог и нутрициолог. Внимательно изучи фото еды.${descriptionHint}
+
+Твоя задача — максимально точно определить КБЖУ:
+1. Определи каждый ингредиент на тарелке
+2. Оцени визуальные пропорции каждого ингредиента (какую часть тарелки занимает)
+3. Если пользователь указал общий вес — раздели его по пропорциям между ингредиентами
+4. Если вес не указан — оцени по размеру тарелки/посуды (стандартная тарелка ~26 см)
+5. Для каждого ингредиента рассчитай КБЖУ по его весу, затем сложи
+6. Учти способ приготовления (жареное, варёное, запечённое)
+
+Верни ТОЛЬКО валидный JSON без markdown, без пояснений:
 {
-  "food_name": "название блюда",
-  "amount_grams": 300,
-  "calories": 450,
-  "protein_g": 25,
-  "fat_g": 15,
-  "carbs_g": 45,
+  "food_name": "точное название блюда на русском",
+  "amount_grams": 350,
+  "calories": 420,
+  "protein_g": 28,
+  "fat_g": 14,
+  "carbs_g": 38,
+  "ingredients": "рис ~180г, котлета говяжья ~170г",
   "confidence": "high|medium|low",
-  "comment": "краткий комментарий"
+  "comment": "пропорции определены визуально: рис ~50%, котлеты ~50%"
 }`,
         },
         {
@@ -58,7 +79,7 @@ export async function analyzeNutritionPhoto(base64Image: string) {
         },
       ],
     },
-  ])
+  ], 'openai/gpt-4o-mini')
 }
 
 export async function getWorkoutRecommendation(workoutHistory: string, userProfile: string) {

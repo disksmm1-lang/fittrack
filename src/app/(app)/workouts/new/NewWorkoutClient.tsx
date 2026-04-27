@@ -21,11 +21,24 @@ interface ExerciseForm {
 
 const MUSCLE_GROUPS = ['Грудь', 'Спина', 'Ноги', 'Плечи', 'Бицепс', 'Трицепс', 'Пресс', 'Другое']
 
-export default function NewWorkoutClient() {
+interface PlannedTemplate {
+  name: string
+  exercises: {
+    exercise_name: string
+    muscle_group: string
+    sets: number
+    reps: string
+    weight_kg: string
+  }[]
+}
+
+export default function NewWorkoutClient({ plannedTemplate }: { plannedTemplate?: PlannedTemplate | null }) {
   const router = useRouter()
   const supabase = createClient()
 
-  const [name, setName] = useState(`Тренировка ${new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`)
+  const [name, setName] = useState(
+    plannedTemplate?.name ?? `Тренировка ${new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`
+  )
   const [exercises, setExercises] = useState<ExerciseForm[]>([])
   const [allExercises, setAllExercises] = useState<Exercise[]>([])
   const [showPicker, setShowPicker] = useState(false)
@@ -40,9 +53,57 @@ export default function NewWorkoutClient() {
 
   useEffect(() => { loadExercises() }, [])
 
+  useEffect(() => {
+    if (!plannedTemplate || allExercises.length === 0) return
+    buildExercisesFromTemplate()
+  }, [allExercises])
+
   async function loadExercises() {
     const { data } = await supabase.from('exercises').select('*').order('muscle_group')
     if (data) setAllExercises(data as Exercise[])
+  }
+
+  async function buildExercisesFromTemplate() {
+    if (!plannedTemplate) return
+    const built: ExerciseForm[] = []
+
+    for (const tEx of plannedTemplate.exercises) {
+      // Find matching exercise by name (case-insensitive)
+      let found = allExercises.find(e =>
+        e.name.toLowerCase() === tEx.exercise_name.toLowerCase()
+      )
+
+      // If not found — create it
+      if (!found) {
+        const { data: created } = await supabase.from('exercises').insert({
+          name: tEx.exercise_name,
+          muscle_group: tEx.muscle_group || 'Другое',
+          equipment: null,
+        }).select().single()
+        if (created) {
+          found = created as Exercise
+          setAllExercises(prev => [...prev, found!])
+        }
+      }
+
+      if (!found) continue
+
+      // Build sets from template
+      const setsCount = typeof tEx.sets === 'number' ? tEx.sets : 3
+      const sets: SetForm[] = Array.from({ length: setsCount }, () => ({
+        weight_kg: tEx.weight_kg ?? '',
+        reps: '',
+      }))
+
+      built.push({
+        exercise_id: found.id,
+        exercise_name: found.name,
+        sets,
+        expanded: true,
+      })
+    }
+
+    setExercises(built)
   }
 
   function addExercise(ex: Exercise) {

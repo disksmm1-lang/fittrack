@@ -3,19 +3,24 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, ChevronRight, Dumbbell, Calendar } from 'lucide-react'
+import { Plus, ChevronRight, Dumbbell, Calendar, Sparkles } from 'lucide-react'
+import { calculateKBJU } from '@/lib/kbju'
+import CardioSection from '../nutrition/CardioSection'
 
 export default async function WorkoutsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: workouts } = await supabase
-    .from('workouts')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('date', { ascending: false })
-    .limit(50)
+  const today = new Date().toISOString().split('T')[0]
+
+  const [{ data: workouts }, { data: profile }, { data: cardioEntries }] = await Promise.all([
+    supabase.from('workouts').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(50),
+    supabase.from('profiles').select('weight, height, age, gender, goal, body_fat, work_type, training_days, training_intensity, activity_level').eq('id', user.id).single(),
+    supabase.from('cardio_entries').select('id, activity_type, duration_minutes, calories_burned').eq('user_id', user.id).eq('date', today).order('created_at'),
+  ])
+
+  const kbju = profile ? calculateKBJU(profile) : null
 
   const grouped: Record<string, typeof workouts> = {}
   for (const w of workouts ?? []) {
@@ -26,7 +31,7 @@ export default async function WorkoutsPage() {
 
   return (
     <div className="px-4 pt-8 pb-6 max-w-lg mx-auto">
-      <div className="flex items-center justify-between mb-7">
+      <div className="flex items-center justify-between mb-5">
         <h1 className="text-[28px] font-bold text-white">Тренировки</h1>
         <Link
           href="/workouts/new"
@@ -36,6 +41,32 @@ export default async function WorkoutsPage() {
           Новая
         </Link>
       </div>
+
+      {/* Кардио / активность сегодня */}
+      <CardioSection
+        entries={cardioEntries ?? []}
+        today={today}
+        profileWeight={profile?.weight ? Number(profile.weight) : null}
+        bmr={kbju?.bmr ?? null}
+        tdee={kbju?.tdee ?? null}
+      />
+
+      {/* Planned workouts banner */}
+      <Link
+        href="/workouts/planned"
+        className="flex items-center justify-between bg-purple-600/15 border border-purple-600/25 rounded-2xl px-4 py-3.5 mb-6"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-purple-600/30 rounded-xl flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-purple-400" />
+          </div>
+          <div>
+            <p className="text-white font-semibold text-sm">Запланированные тренировки</p>
+            <p className="text-purple-400/70 text-xs">Создай сам или попроси ИИ</p>
+          </div>
+        </div>
+        <ChevronRight className="w-4 h-4 text-purple-400/60" />
+      </Link>
 
       {Object.keys(grouped).length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">

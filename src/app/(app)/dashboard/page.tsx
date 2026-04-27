@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Dumbbell, Apple, Sparkles, Plus, ChevronRight, Flame, Zap } from 'lucide-react'
+import { Dumbbell, Apple, Sparkles, Plus, ChevronRight, Flame, Zap, User } from 'lucide-react'
+import { calculateKBJU } from '@/lib/kbju'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -13,28 +14,24 @@ export default async function DashboardPage() {
 
   const today = new Date().toISOString().split('T')[0]
 
-  const [{ data: profile }, { data: todayWorkout }, { data: todayFood }] = await Promise.all([
+  const [{ data: profile }, { data: todayWorkout }, { data: todayFood }, { data: todayCardio }] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', user.id).single(),
     supabase.from('workouts').select('id, name').eq('user_id', user.id).eq('date', today).maybeSingle(),
     supabase.from('food_entries').select('calories, protein_g, fat_g, carbs_g').eq('user_id', user.id).eq('date', today),
+    supabase.from('cardio_entries').select('activity_type, duration_minutes, calories_burned').eq('user_id', user.id).eq('date', today),
   ])
 
   const totalCalories = todayFood?.reduce((sum, e) => sum + e.calories, 0) ?? 0
+  const totalCardioCalories = todayCardio?.reduce((sum, e) => sum + e.calories_burned, 0) ?? 0
   const totalProtein = todayFood?.reduce((sum, e) => sum + e.protein_g, 0) ?? 0
   const totalFat = todayFood?.reduce((sum, e) => sum + e.fat_g, 0) ?? 0
   const totalCarbs = todayFood?.reduce((sum, e) => sum + e.carbs_g, 0) ?? 0
 
-  let calorieGoal = 2000
-  if (profile?.weight && profile?.height && profile?.age && profile?.gender) {
-    const bmr = profile.gender === 'male'
-      ? 10 * profile.weight + 6.25 * profile.height - 5 * profile.age + 5
-      : 10 * profile.weight + 6.25 * profile.height - 5 * profile.age - 161
-    const multipliers: Record<string, number> = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 }
-    const tdee = bmr * (multipliers[profile.activity_level ?? 'moderate'] ?? 1.55)
-    calorieGoal = profile.goal === 'lose_weight' ? tdee - 500 : profile.goal === 'gain_muscle' ? tdee + 300 : tdee
-  }
+  const kbju = profile ? calculateKBJU(profile) : null
+  const calorieGoal = kbju?.calories ?? 2000
 
-  const calProgress = Math.min((totalCalories / calorieGoal) * 100, 100)
+  const effectiveGoal = calorieGoal + totalCardioCalories
+  const calProgress = Math.min((totalCalories / effectiveGoal) * 100, 100)
 
   const name = profile?.name || user.email?.split('@')[0] || 'Спортсмен'
   const hour = new Date().getHours()
@@ -45,11 +42,16 @@ export default async function DashboardPage() {
   return (
     <div className="px-4 pt-8 pb-6 max-w-lg mx-auto">
       {/* Header */}
-      <div className="mb-7">
-        <p className="text-zinc-500 text-sm font-medium capitalize">{todayStr}</p>
-        <h1 className="text-[28px] font-bold text-white mt-0.5 leading-tight">
-          {greeting}, {name.split(' ')[0]}
-        </h1>
+      <div className="flex items-start justify-between mb-7">
+        <div>
+          <p className="text-zinc-500 text-sm font-medium capitalize">{todayStr}</p>
+          <h1 className="text-[28px] font-bold text-white mt-0.5 leading-tight">
+            {greeting}, {name.split(' ')[0]}
+          </h1>
+        </div>
+        <Link href="/profile" className="w-10 h-10 bg-[#111] border border-white/[0.07] rounded-xl flex items-center justify-center mt-1 flex-shrink-0">
+          <User className="w-5 h-5 text-zinc-400" />
+        </Link>
       </div>
 
       {/* Stats row */}
@@ -66,6 +68,12 @@ export default async function DashboardPage() {
           <div className="mt-3 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
             <div className="h-full bg-orange-500 rounded-full" style={{ width: `${calProgress}%` }} />
           </div>
+          {totalCardioCalories > 0 && (
+            <div className="mt-2 flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              <span className="text-red-400 text-xs font-medium">−{totalCardioCalories} ккал сожжено</span>
+            </div>
+          )}
         </div>
 
         <div className="bg-[#111] border border-white/[0.07] rounded-2xl p-4">
