@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Plus, Trash2, ChevronDown, ChevronUp, X, Check } from 'lucide-react'
+import { awardXPAndShow } from '@/components/XPToast'
 import Link from 'next/link'
 import type { Exercise } from '@/types'
 
@@ -246,6 +247,7 @@ export default function NewWorkoutClient({ plannedTemplate }: { plannedTemplate?
       name: name.trim(),
       duration_minutes: durationMinutes > 0 ? durationMinutes : null,
     }).eq('id', workoutIdRef.current)
+    await awardXPAndShow('workout_complete')
     router.push('/workouts')
   }
 

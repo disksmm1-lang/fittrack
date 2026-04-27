@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Plus, Flame, X, ChevronDown, Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { awardXPAndShow } from '@/components/XPToast'
 
 const ACTIVITIES = [
   { key: 'walking',       label: 'Ходьба',               icon: '🚶' },
@@ -100,6 +101,7 @@ export default function CardioSection({ entries: initial, today, profileWeight, 
       duration_minutes: newItem.duration_minutes,
       calories_burned: newItem.calories_burned,
     })
+    await awardXPAndShow('cardio_entry')
     router.refresh()
   }
 

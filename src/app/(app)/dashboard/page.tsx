@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { Dumbbell, Apple, Sparkles, Plus, ChevronRight, Flame, Zap, User } from 'lucide-react'
 import { calculateKBJU } from '@/lib/kbju'
 import { getCachedProfile, getCachedFoodEntries, getCachedCardioEntries, getCachedTodayWorkout } from '@/lib/supabase/cached'
+import { xpProgressInLevel } from '@/lib/gamification'
+import WeeklyChallenges from '@/components/WeeklyChallenges'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -37,13 +39,17 @@ export default async function DashboardPage() {
   const name = profile?.name || user.email?.split('@')[0] || 'Спортсмен'
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер'
-
   const todayStr = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })
+
+  const level = profile?.level ?? 1
+  const streak = profile?.streak_days ?? 0
+  const xp = profile?.xp ?? 0
+  const { current: xpCurrent, needed: xpNeeded } = xpProgressInLevel(xp)
 
   return (
     <div className="px-4 pt-8 pb-6 max-w-lg mx-auto">
       {/* Header */}
-      <div className="flex items-start justify-between mb-7">
+      <div className="flex items-start justify-between mb-5">
         <div>
           <p className="text-zinc-500 text-sm font-medium capitalize">{todayStr}</p>
           <h1 className="text-[28px] font-bold text-white mt-0.5 leading-tight">
@@ -53,6 +59,28 @@ export default async function DashboardPage() {
         <Link href="/profile" className="w-10 h-10 bg-[#111] border border-white/[0.07] rounded-xl flex items-center justify-center mt-1 flex-shrink-0">
           <User className="w-5 h-5 text-zinc-400" />
         </Link>
+      </div>
+
+      {/* Level / streak bar */}
+      <div className="bg-[#111] border border-white/[0.07] rounded-2xl px-4 py-3 mb-4 flex items-center gap-3">
+        <div className="w-9 h-9 bg-purple-600/20 rounded-xl flex items-center justify-center flex-shrink-0">
+          <span className="text-purple-400 font-bold text-sm">{level}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-white text-xs font-semibold">Уровень {level}</span>
+            <span className="text-zinc-600 text-xs">{xpCurrent}/{xpNeeded} XP</span>
+          </div>
+          <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min((xpCurrent / xpNeeded) * 100, 100)}%` }} />
+          </div>
+        </div>
+        {streak > 0 && (
+          <div className="flex items-center gap-1 bg-orange-500/15 px-2.5 py-1.5 rounded-xl flex-shrink-0">
+            <Flame className="w-3.5 h-3.5 text-orange-400" />
+            <span className="text-orange-400 font-bold text-sm">{streak}</span>
+          </div>
+        )}
       </div>
 
       {/* Stats row */}
@@ -135,6 +163,9 @@ export default async function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Weekly challenges */}
+      <WeeklyChallenges />
 
       {/* Quick actions */}
       <div className="grid grid-cols-2 gap-3 mt-4">

@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Sparkles, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { awardXPAndShow } from '@/components/XPToast'
 
 const MEAL_LABELS: Record<string, string> = {
   breakfast: 'Завтрак', lunch: 'Обед', dinner: 'Ужин', snack: 'Перекус',
@@ -75,6 +76,7 @@ function AddFoodForm() {
       carbs_g: parseFloat(form.carbs_g) || 0,
     })
 
+    await awardXPAndShow('food_entry')
     router.push('/nutrition')
   }
 
