@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Plus, ChevronRight, Dumbbell, Calendar, Sparkles } from 'lucide-react'
 import { calculateKBJU } from '@/lib/kbju'
 import CardioSection from '../nutrition/CardioSection'
+import { getCachedProfile, getCachedCardioEntries, getCachedWorkouts } from '@/lib/supabase/cached'
 
 export default async function WorkoutsPage() {
   const supabase = await createClient()
@@ -14,10 +15,10 @@ export default async function WorkoutsPage() {
 
   const today = new Date().toISOString().split('T')[0]
 
-  const [{ data: workouts }, { data: profile }, { data: cardioEntries }] = await Promise.all([
-    supabase.from('workouts').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(50),
-    supabase.from('profiles').select('weight, height, age, gender, goal, body_fat, work_type, training_days, training_intensity, activity_level').eq('id', user.id).single(),
-    supabase.from('cardio_entries').select('id, activity_type, duration_minutes, calories_burned').eq('user_id', user.id).eq('date', today).order('created_at'),
+  const [workouts, profile, cardioEntries] = await Promise.all([
+    getCachedWorkouts(user.id),
+    getCachedProfile(user.id),
+    getCachedCardioEntries(user.id, today),
   ])
 
   const kbju = profile ? calculateKBJU(profile) : null

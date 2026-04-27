@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
+import { getCachedProfile, getCachedFoodHistory, getCachedWeightHistory } from '@/lib/supabase/cached'
 import { redirect } from 'next/navigation'
 import { calculateKBJU } from '@/lib/kbju'
 import StatsClient from './StatsClient'
@@ -14,28 +15,20 @@ export default async function StatsPage() {
   const d90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
   const [
-    { data: profile },
-    { data: foodEntries },
+    profile,
+    foodEntries,
     { data: workouts },
-    { data: weightHistory },
+    weightHistory,
     { data: cardioEntries },
   ] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user.id).single(),
-    supabase.from('food_entries')
-      .select('date, calories, protein_g, fat_g, carbs_g')
-      .eq('user_id', user.id)
-      .gte('date', d90)
-      .order('date'),
+    getCachedProfile(user.id),
+    getCachedFoodHistory(user.id, d90),
     supabase.from('workouts')
       .select('id, date, name, duration_minutes')
       .eq('user_id', user.id)
       .gte('date', d90)
       .order('date'),
-    supabase.from('weight_history')
-      .select('date, weight, body_fat')
-      .eq('user_id', user.id)
-      .gte('date', d90)
-      .order('date'),
+    getCachedWeightHistory(user.id, d90),
     supabase.from('cardio_entries')
       .select('date, activity_type, duration_minutes, calories_burned')
       .eq('user_id', user.id)

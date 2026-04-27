@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Dumbbell, Apple, Sparkles, Plus, ChevronRight, Flame, Zap, User } from 'lucide-react'
 import { calculateKBJU } from '@/lib/kbju'
+import { getCachedProfile, getCachedFoodEntries, getCachedCardioEntries, getCachedTodayWorkout } from '@/lib/supabase/cached'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -14,11 +15,11 @@ export default async function DashboardPage() {
 
   const today = new Date().toISOString().split('T')[0]
 
-  const [{ data: profile }, { data: todayWorkout }, { data: todayFood }, { data: todayCardio }] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user.id).single(),
-    supabase.from('workouts').select('id, name').eq('user_id', user.id).eq('date', today).maybeSingle(),
-    supabase.from('food_entries').select('calories, protein_g, fat_g, carbs_g').eq('user_id', user.id).eq('date', today),
-    supabase.from('cardio_entries').select('activity_type, duration_minutes, calories_burned').eq('user_id', user.id).eq('date', today),
+  const [profile, todayWorkout, todayFood, todayCardio] = await Promise.all([
+    getCachedProfile(user.id),
+    getCachedTodayWorkout(user.id, today),
+    getCachedFoodEntries(user.id, today),
+    getCachedCardioEntries(user.id, today),
   ])
 
   const totalCalories = todayFood?.reduce((sum, e) => sum + e.calories, 0) ?? 0

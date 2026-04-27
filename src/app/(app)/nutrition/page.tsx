@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Plus, Camera } from 'lucide-react'
 import { calculateKBJU } from '@/lib/kbju'
 import FoodEntries from './FoodEntries'
+import { getCachedProfile, getCachedFoodEntries } from '@/lib/supabase/cached'
 
 const MEAL_LABELS: Record<string, string> = {
   breakfast: 'Завтрак',
@@ -28,9 +29,9 @@ export default async function NutritionPage() {
 
   const today = new Date().toISOString().split('T')[0]
 
-  const [{ data: entries }, { data: profile }] = await Promise.all([
-    supabase.from('food_entries').select('*').eq('user_id', user.id).eq('date', today).order('created_at'),
-    supabase.from('profiles').select('weight, height, age, gender, goal, body_fat, work_type, training_days, training_intensity, activity_level').eq('id', user.id).single(),
+  const [entries, profile] = await Promise.all([
+    getCachedFoodEntries(user.id, today),
+    getCachedProfile(user.id),
   ])
 
   const totals = (entries ?? []).reduce(
